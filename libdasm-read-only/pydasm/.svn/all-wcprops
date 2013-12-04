@@ -1,0 +1,29 @@
+K 25
+svn:wc:ra_dav:version-url
+V 29
+/svn/!svn/ver/15/trunk/pydasm
+END
+README.txt
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/2/trunk/pydasm/README.txt
+END
+das.py
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/!svn/ver/15/trunk/pydasm/das.py
+END
+pydasm.c
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/!svn/ver/14/trunk/pydasm/pydasm.c
+END
+setup.py
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/!svn/ver/2/trunk/pydasm/setup.py
+END

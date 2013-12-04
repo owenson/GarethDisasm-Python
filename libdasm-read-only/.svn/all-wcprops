@@ -1,0 +1,65 @@
+K 25
+svn:wc:ra_dav:version-url
+V 22
+/svn/!svn/ver/15/trunk
+END
+libdasm.c
+K 25
+svn:wc:ra_dav:version-url
+V 31
+/svn/!svn/ver/2/trunk/libdasm.c
+END
+Makefile
+K 25
+svn:wc:ra_dav:version-url
+V 30
+/svn/!svn/ver/2/trunk/Makefile
+END
+HISTORY.txt
+K 25
+svn:wc:ra_dav:version-url
+V 34
+/svn/!svn/ver/15/trunk/HISTORY.txt
+END
+libdasm.h
+K 25
+svn:wc:ra_dav:version-url
+V 31
+/svn/!svn/ver/2/trunk/libdasm.h
+END
+TODO.txt
+K 25
+svn:wc:ra_dav:version-url
+V 30
+/svn/!svn/ver/2/trunk/TODO.txt
+END
+LIB.txt
+K 25
+svn:wc:ra_dav:version-url
+V 29
+/svn/!svn/ver/2/trunk/LIB.txt
+END
+Makefile.msvc
+K 25
+svn:wc:ra_dav:version-url
+V 35
+/svn/!svn/ver/2/trunk/Makefile.msvc
+END
+libdasm.def
+K 25
+svn:wc:ra_dav:version-url
+V 33
+/svn/!svn/ver/2/trunk/libdasm.def
+END
+opcode_tables.h
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/!svn/ver/13/trunk/opcode_tables.h
+END
+README.txt
+K 25
+svn:wc:ra_dav:version-url
+V 32
+/svn/!svn/ver/2/trunk/README.txt
+END
