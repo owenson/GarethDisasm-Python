@@ -1,7 +1,8 @@
 import os,md5,sys
-sys.path.append("distorm-read-only/build/lib.linux-i686-2.7")
+sys.path.append("distorm-read-only/build/lib")
 #from pydasm import *
 import distorm3
+import mmap
 
 labels = {}
 tovisit = []
@@ -22,9 +23,8 @@ def fileOffsetToMemoryOffset(off):
 	return off + BASE_ADDR;
 
 
-fd = file(os.sys.argv[1], 'rb')
-data = fd.read()
-fd.close()
+fd = file(os.sys.argv[1], 'r+b')
+data = mmap.mmap(fd.fileno(), 0)
 
 fileLen = len(data)
 
