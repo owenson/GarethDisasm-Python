@@ -1,5 +1,7 @@
-import os,md5
-from pydasm import *
+import os,md5,sys
+sys.path.append("distorm-read-only/build/lib.linux-i686-2.7")
+#from pydasm import *
+import distorm3
 
 labels = {}
 tovisit = []
@@ -15,13 +17,14 @@ def fileOffsetToMemoryOffset(off):
 	global BASE_ADDR;
 	return off + BASE_ADDR;
 
-  
+
 fd = file(os.sys.argv[1], 'rb')
 data = fd.read()
 fd.close()
-  
+
 fileLen = len(data)
 
+#    print off, inst.lower()
 print "PASS 1"
 
 # first pass
@@ -34,21 +37,25 @@ while True:
     offset = tovisit.pop()
 
     terminalInstruction = False
-        
+
     while((not disassembly.has_key(offset)) and (not terminalInstruction) and memoryOffsetToFileOffset(offset) < fileLen):
         if offset in tovisit:
             tovisit.remove(offset)
 
-        inst = get_instruction(data[offset:], MODE_16)
+        inst = distorm3.Decode(offset, data[memoryOffsetToFileOffset(offset):], distorm3.Decode16Bits)[0]
+        #print offset,inst
+        ins = inst['mnemonic']
+        ops = inst['ops']
+        #inst = get_instruction(data[offset:], MODE_16)
 
-        if not inst:
-            print "fail"
-            break
+        #if not inst:
+        #    print "fail"
+        #    break
 
-        ins = get_instruction_string(inst, FORMAT_INTEL, offset)
+        #ins = get_instruction_string(inst, FORMAT_INTEL, offset)
 
-        if (ins.startswith("call") or ins[0] == 'j' or ins.startswith("loop")) and inst.op1.type == OPERAND_TYPE_IMMEDIATE:
-            newoff = int(get_operand_string(inst, 0,FORMAT_INTEL, offset)[2:],16)
+        if (ins.startswith("call") or ins[0] == 'j' or ins.startswith("loop")) and ops[0].isdigit():
+            newoff = int(ops[2:],16)
 
             if (not newoff in tovisit) and (not disassembly.has_key(newoff)):
                 tovisit.append(newoff)
@@ -64,11 +71,11 @@ while True:
 
 
         disassembly[offset] = inst
-            
+
         if(ins.startswith("ret") or ins.startswith("jmp")):
             terminalInstruction = True;
         else:
-            offset += inst.length;
+            offset += inst['size'];
 
         if(disassembly.has_key(offset)): #next instruction already visited - so stop
             break
@@ -82,20 +89,20 @@ while offset < fileOffsetToMemoryOffset(fileLen):
     if labels.has_key(offset):
         if labels[offset]['type'] == "sub":
            inProcLabel = offset
-        
+
     if disassembly.has_key(offset):
         inst = disassembly[offset]
-        ins = get_instruction_string(inst, FORMAT_INTEL, offset)
+        ins = inst['mnemonic']
 
         if(ins.startswith("call") and inProcLabel):  # collate calls out of function
-            labels[inProcLabel]['calls_out'].append(int(get_operand_string(inst, 0,FORMAT_INTEL, offset)[2:],16))        
+            labels[inProcLabel]['calls_out'].append(int(inst['ops'][2:],16))
 
         if(ins.startswith("ret") and inProcLabel):  #detect function termination
             if not labels[inProcLabel].has_key('end'):
-                labels[inProcLabel]['end'] = offset + inst.length
+                labels[inProcLabel]['end'] = offset + inst['size']
             inProcLabel = False
-        
-        offset += inst.length
+
+        offset += inst['size']
     else:
         offset += 1
 
@@ -107,26 +114,26 @@ while offset < fileOffsetToMemoryOffset(fileLen):
     if labels.has_key(offset):
         if labels[offset]['type'] == "sub":
            print
-           print "---STARTPROC---" 
+           print "---STARTPROC---"
            inProcLabel = offset
         print "%s_%x:" % (labels[offset]['type'], offset)
-    
+
     if disassembly.has_key(offset):
         inst = disassembly[offset]
 
-        ins = get_instruction_string(inst, FORMAT_INTEL, offset)
-        
-        print "%08x:\t%s" % (offset,ins)        
-                
+        ins = inst['instr']
+
+        print "%08x:\t%s" % (offset,ins)
+
         if(ins.startswith("ret") and inProcLabel):  #detect function termination
             print "---ENDPROC---  ; sub_%x ; length = %d bytes ; %d calls out" % (inProcLabel, labels[inProcLabel]['end'] - inProcLabel, len(labels[inProcLabel]['calls_out']))
             print
             inProcLabel = False
-        
-        
-        offset += inst.length
+
+
+        offset += inst['size']
     else:
-        print "%08x:\tdb 0x%02x" % (offset, ord(data[offset]))
+        print "%08x:\tdb 0x%02x %s" % (offset, ord(data[offset]), data[offset] if ord(data[offset])>0x20 and ord(data[offset])<0x80 else '')
         offset += 1
 
 print "TOTaL LBLS", len(labels)
