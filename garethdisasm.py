@@ -9,6 +9,10 @@ disassembly = {}
 
 BASE_ADDR = 0x0;
 
+def getLblName(off):
+    global labels
+    return "{}_{}".format(labels[off]['type'], off)
+
 def memoryOffsetToFileOffset(off):
 	global BASE_ADDR;
 	return off - BASE_ADDR;
@@ -138,10 +142,19 @@ while offset < fileOffsetToMemoryOffset(fileLen):
 
 print "TOTaL LBLS", len(labels)
 
+#for lbladdr in labels:
+#    lbl = labels[lbladdr]
+#    if lbl['type'] != 'sub':
+#        continue
+#    if lbl.has_key('end'):
+#        instructions = data[memoryOffsetToFileOffset(lbladdr):memoryOffsetToFileOffset(lbl['end'])]
+#        print "%x %d %d %d %s" % (lbladdr, lbl['end'] - lbladdr, len(lbl['calls_out']), len(lbl['xrefs']), md5.new(instructions).hexdigest())
+
 for lbladdr in labels:
     lbl = labels[lbladdr]
     if lbl['type'] != 'sub':
         continue
-    if lbl.has_key('end'):
-        instructions = data[memoryOffsetToFileOffset(lbladdr):memoryOffsetToFileOffset(lbl['end'])]
-        print "%x %d %d %d %s" % (lbladdr, lbl['end'] - lbladdr, len(lbl['calls_out']), len(lbl['xrefs']), md5.new(instructions).hexdigest())
+    lblname = getLblName(lbladdr)
+    for xref in set(lbl['calls_out']):
+        xrefnm = getLblName(xref)
+        print "{} -> {}".format(lblname, xrefnm)
