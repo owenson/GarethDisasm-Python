@@ -112,9 +112,9 @@ while offset < fileOffsetToMemoryOffset(fileLen):
 
 #pass 3 - print
 print "PASS 3: Display"
-inProcLabel = False
 def disassemblyText(disassembly, labels, start, end):
     str = '<pre style="font-family: monospace; font-size: 14px;">'
+    inProcLabel = False
     offset = start
     while offset < end:
         if labels.has_key(offset):
