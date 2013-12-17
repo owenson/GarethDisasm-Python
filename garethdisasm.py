@@ -1,18 +1,18 @@
 import os,md5,sys
-sys.path.append("distorm-read-only/build/lib")
+from PyQt4.QtGui import *
+from DisasmWin import *
+sys.path.append("distorm-read-only/build/lib.linux-i686-2.7/")
+#sys.path.append("distorm-read-only/build/lib")
 #from pydasm import *
+
+BASE_ADDR = 0x0;
 import distorm3
 import mmap
+from utils import *
 
 labels = {}
 tovisit = []
 disassembly = {}
-
-BASE_ADDR = 0x0;
-
-def getLblName(off):
-    global labels
-    return "{}_{}".format(labels[off]['type'], off)
 
 def memoryOffsetToFileOffset(off):
 	global BASE_ADDR;
@@ -21,7 +21,6 @@ def memoryOffsetToFileOffset(off):
 def fileOffsetToMemoryOffset(off):
 	global BASE_ADDR;
 	return off + BASE_ADDR;
-
 
 fd = file(os.sys.argv[1], 'r+b')
 data = mmap.mmap(fd.fileno(), 0)
@@ -32,6 +31,7 @@ fileLen = len(data)
 print "PASS 1"
 
 # first pass
+labels[BASE_ADDR] = {'type':'sub', 'name':'_start', 'xrefs':[], 'calls_out':[]}
 tovisit.append(BASE_ADDR)
 
 offset = 0
@@ -113,32 +113,36 @@ while offset < fileOffsetToMemoryOffset(fileLen):
 #pass 3 - print
 print "PASS 3: Display"
 inProcLabel = False
-offset = BASE_ADDR
-while offset < fileOffsetToMemoryOffset(fileLen):
-    if labels.has_key(offset):
-        if labels[offset]['type'] == "sub":
-           print
-           print "---STARTPROC---"
-           inProcLabel = offset
-        print "%s_%x:" % (labels[offset]['type'], offset)
+def disassemblyText(disassembly, labels, start, end):
+    str = '<pre style="font-family: monospace; font-size: 14px;">'
+    offset = start
+    while offset < end:
+        if labels.has_key(offset):
+            if labels[offset]['type'] == "sub":
+               str += "\n\n---STARTPROC---\n"
+               inProcLabel = offset
+            str += "<span style='color:blue'>%s_%x</span>:\n" % (labels[offset]['type'], offset)
 
-    if disassembly.has_key(offset):
-        inst = disassembly[offset]
+        if disassembly.has_key(offset):
+            inst = disassembly[offset]
 
-        ins = inst['instr']
+            ins = inst['instr']
 
-        print "%08x:\t%s" % (offset,ins)
+            str += "<span style='color:red'>%08x</span>:\t%s\n" % (offset,ins)
 
-        if(ins.startswith("ret") and inProcLabel):  #detect function termination
-            print "---ENDPROC---  ; sub_%x ; length = %d bytes ; %d calls out" % (inProcLabel, labels[inProcLabel]['end'] - inProcLabel, len(labels[inProcLabel]['calls_out']))
-            print
-            inProcLabel = False
+            if(ins.startswith("ret") and inProcLabel):  #detect function termination
+                str += "<span style='color:blue'>---ENDPROC---  ; sub_%x ; length = %d bytes ; %d calls out</span>\n\n" % (inProcLabel, labels[inProcLabel]['end'] - inProcLabel, len(labels[inProcLabel]['calls_out']))
+                inProcLabel = False
 
 
-        offset += inst['size']
-    else:
-        print "%08x:\tdb 0x%02x %s" % (offset, ord(data[offset]), data[offset] if ord(data[offset])>0x20 and ord(data[offset])<0x80 else '')
-        offset += 1
+            offset += inst['size']
+        else:
+            str += "<span style='color:red'>%08x</span>:\tdb 0x%02x %s\n" % (offset, ord(data[offset]), data[offset] if isPrintable(data[offset]) else '')
+            offset += 1
+    str += "</pre>"
+    return str
+
+dtext = disassemblyText(disassembly, labels, BASE_ADDR, BASE_ADDR+fileLen)
 
 print "TOTaL LBLS", len(labels)
 
@@ -149,12 +153,21 @@ print "TOTaL LBLS", len(labels)
 #    if lbl.has_key('end'):
 #        instructions = data[memoryOffsetToFileOffset(lbladdr):memoryOffsetToFileOffset(lbl['end'])]
 #        print "%x %d %d %d %s" % (lbladdr, lbl['end'] - lbladdr, len(lbl['calls_out']), len(lbl['xrefs']), md5.new(instructions).hexdigest())
+def graphFuncs(labels):
+    str = 'digraph {'
+    for lbladdr in labels:
+        lbl = labels[lbladdr]
+        if lbl['type'] != 'sub':
+            continue
+        lblname = getLblName(labels, lbladdr)
+        for xref in set(lbl['calls_out']):
+            xrefnm = getLblName(labels, xref)
+            str += "{} -> {}\n".format(lblname, xrefnm)
+    str += "}"
+    return str
 
-for lbladdr in labels:
-    lbl = labels[lbladdr]
-    if lbl['type'] != 'sub':
-        continue
-    lblname = getLblName(lbladdr)
-    for xref in set(lbl['calls_out']):
-        xrefnm = getLblName(xref)
-        print "{} -> {}".format(lblname, xrefnm)
+print graphFuncs(labels)
+app = QApplication(sys.argv)
+ex = DisasmWin(dtext, labels)
+sys.exit(app.exec_())
+
