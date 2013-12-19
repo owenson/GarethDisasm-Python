@@ -1,6 +1,8 @@
 import os,md5,sys
 from PyQt4.QtGui import *
 from DisasmWin import *
+import sqlite3
+import json
 sys.path.append("distorm-read-only/build/lib.linux-i686-2.7/")
 #sys.path.append("distorm-read-only/build/lib")
 #from pydasm import *
@@ -13,6 +15,21 @@ from utils import *
 labels = {}
 tovisit = []
 disassembly = {}
+
+dbcon = sqlite3.connect(sys.argv[1] + ".db")
+dbcur = dbcon.cursor()
+LABEL_FUNC = 0
+LABEL_LABEL = 1
+LABEL_DATA = 2
+dbcur.execute("DROP TABLE IF EXISTS disasm")
+dbcur.execute("CREATE TABLE disasm (offset int, mnemonic text, ops text, size int, meta text, primary key(offset))")
+dbcur.execute("DROP TABLE IF EXISTS labels")
+dbcur.execute("CREATE TABLE labels (offset int, labelName text, labelType int, meta text, primary key(offset))")
+dbcur.execute("DROP TABLE IF EXISTS xrefs")
+dbcur.execute("CREATE TABLE xrefs (fromOffset int, toOffset int, primary key(fromOffset))")
+dbcur.execute("DROP TABLE IF EXISTS segments")
+dbcur.execute("CREATE TABLE segments (id integer primary key, name text, fileOffset int, virtOffset int, size int, read bool, write bool, execute bool)")
+
 
 def memoryOffsetToFileOffset(off):
 	global BASE_ADDR;
@@ -46,10 +63,11 @@ while True:
         if offset in tovisit:
             tovisit.remove(offset)
 
-        inst = distorm3.Decode(offset, data[memoryOffsetToFileOffset(offset):], distorm3.Decode16Bits)[0]
+        inst = distorm3.Decode(offset, data[memoryOffsetToFileOffset(offset):], distorm3.Decode32Bits)[0]
         #print offset,inst
         ins = inst['mnemonic']
         ops = inst['ops']
+        dbcur.execute("INSERT INTO disasm (offset, mnemonic, ops, size, meta) VALUES (?, ?, ?, ?, ?)", (offset, ins, ops, inst['size'], json.dumps(inst)))
         #inst = get_instruction(data[offset:], MODE_16)
 
         #if not inst:
@@ -67,11 +85,14 @@ while True:
             if labels.has_key(newoff):
                 if not offset in labels[newoff]['xrefs']:
                     labels[newoff]['xrefs'].append(offset)
+                    dbcur.execute("INSERT INTO xrefs (fromOffset, toOffset) VALUES(?, ?)", (offset, newoff))
             else:
                 labels[newoff] = {}
                 labels[newoff]['calls_out'] = []
                 labels[newoff]['xrefs'] = [ offset ]
+                dbcur.execute("INSERT INTO xrefs (fromOffset, toOffset) VALUES(?, ?)", (offset, newoff))
                 labels[newoff]['type'] = ('sub' if ins.startswith('call') else 'lbl')
+                dbcur.execute("INSERT INTO labels (offset, labelName, labelType, meta) VALUES (?, ?, ?, ?)", (newoff, getLblName(labels, newoff), LABEL_FUNC if ins.startswith('call') else LABEL_LABEL, json.dumps(labels[newoff])))
 
 
         disassembly[offset] = inst
@@ -98,12 +119,14 @@ while offset < fileOffsetToMemoryOffset(fileLen):
         inst = disassembly[offset]
         ins = inst['mnemonic']
 
-        if(ins.startswith("call") and inProcLabel):  # collate calls out of function
+        if(ins.startswith("call") and inProcLabel and inst['ops'].isdigit()):  # collate calls out of function
             labels[inProcLabel]['calls_out'].append(int(inst['ops'][2:],16))
+            dbcur.execute("UPDATE labels SET meta=? WHERE offset=?", (json.dumps(labels[inProcLabel]), inProcLabel))
 
         if(ins.startswith("ret") and inProcLabel):  #detect function termination
             if not labels[inProcLabel].has_key('end'):
                 labels[inProcLabel]['end'] = offset + inst['size']
+                dbcur.execute("UPDATE labels SET meta=? WHERE offset=?", (json.dumps(labels[inProcLabel]), inProcLabel))
             inProcLabel = False
 
         offset += inst['size']
@@ -166,8 +189,11 @@ def graphFuncs(labels):
     str += "}"
     return str
 
-print graphFuncs(labels)
-app = QApplication(sys.argv)
-ex = DisasmWin(dtext, labels)
-sys.exit(app.exec_())
+#print graphFuncs(labels)
+#app = QApplication(sys.argv)
+#ex = DisasmWin(dtext, labels)
+#sys.exit(app.exec_())
+
+dbcon.commit()
+dbcon.close()
 
