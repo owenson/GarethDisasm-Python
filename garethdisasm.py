@@ -56,7 +56,7 @@ print ("Reading imports")
 for entry in pe.DIRECTORY_ENTRY_IMPORT:
 #  print entry.dll
   for imp in entry.imports:
-      dbcur.execute("INSERT INTO labels (offset, labelName, labelType) VALUES (?, ?, ?)", (imp.address, "{}!{}".format(entry.dll, imp.name), LABEL_IMPORT))
+      dbcur.execute("INSERT INTO labels (offset, labelName, labelType) VALUES (?, ?, ?)", (imp.address, "{}!{}".format(entry.dll.lower(), imp.name), LABEL_IMPORT))
 #      print "{}!{} {:x}".format(entry.dll, imp.name, imp.address)
 
 dbcon.commit()
@@ -141,7 +141,6 @@ while True:
                 labels[newoff]['xrefs'] = [ offset ]
                 dbcur.execute("INSERT INTO xrefs (fromOffset, toOffset) VALUES(?, ?)", (offset, newoff))
                 labels[newoff]['type'] = ('sub' if ins.startswith('call') else 'lbl')
-                labels[newoff]['end'] = 0
                 dbcur.execute("INSERT INTO labels (offset, labelName, labelType, meta) VALUES (?, ?, ?, ?)", (newoff, getLblName(labels, newoff), LABEL_FUNC if ins.startswith('call') else LABEL_LABEL, json.dumps(labels[newoff])))
 
 
@@ -160,29 +159,30 @@ print "PASS 2"
 # second pass - does function related passing
 inProcLabel = False
 offset = BASE_ADDR
-while offset < fileOffsetToMemoryOffset(fileLen):
+for off in labels:
+#while offset < fileOffsetToMemoryOffset(fileLen):
 # check for function start
-    if labels.has_key(offset):
-        if labels[offset]['type'] == "sub":
-           inProcLabel = offset
+    if labels[off]['type'] != "sub":
+        continue
+    offset = off
+    while True:
+        if disassembly.has_key(offset):
+            inst = disassembly[offset]
+            ins = inst['mnemonic']
 
-    if disassembly.has_key(offset):
-        inst = disassembly[offset]
-        ins = inst['mnemonic']
+            if(ins.startswith("call") and inst['ops'].find("0x") != -1 and inst['ops'].find("[") == -1):  # collate calls out of function
+                labels[off]['calls_out'].append(int(inst['ops'][inst['ops'].find("0x")+2:],16))
+                dbcur.execute("UPDATE labels SET meta=? WHERE offset=?", (json.dumps(labels[off]), off))
 
-        if(ins.startswith("call") and inProcLabel and inst['ops'].isdigit()):  # collate calls out of function
-            labels[inProcLabel]['calls_out'].append(int(inst['ops'][2:],16))
-            dbcur.execute("UPDATE labels SET meta=? WHERE offset=?", (json.dumps(labels[inProcLabel]), inProcLabel))
+            if(ins.startswith("ret")):  #detect function termination
+                if not labels[off].has_key('end'):
+                    labels[off]['end'] = offset + inst['size']
+                    dbcur.execute("UPDATE labels SET meta=? WHERE offset=?", (json.dumps(labels[off]), off))
+                break
 
-        if(ins.startswith("ret") and inProcLabel):  #detect function termination
-            if not labels[inProcLabel].has_key('end'):
-                labels[inProcLabel]['end'] = offset + inst['size']
-                dbcur.execute("UPDATE labels SET meta=? WHERE offset=?", (json.dumps(labels[inProcLabel]), inProcLabel))
-            inProcLabel = False
-
-        offset += inst['size']
-    else:
-        offset += 1
+            offset += inst['size']
+        else:
+            offset += 1
 
 #pass 3 - print
 print "PASS 3: Display"
