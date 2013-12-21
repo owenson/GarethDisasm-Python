@@ -70,6 +70,9 @@ def fileOffsetToMemoryOffset(off):
         if off>=r['fileOffset'] and off<=r['fileOffset']+r['fileSize']:
             return off - r['fileOffset'] + r['virtOffset']
     return None
+
+# Replace offsets with label names/import names
+# Parse full instruction string
 re_off = re.compile("0x[0-9a-f]+")
 def replaceLabels(inst):
     news = inst
@@ -80,33 +83,32 @@ def replaceLabels(inst):
             news = news.replace(o, res[0]['labelName'])
     return news
 
-
+# Memory map file
 fd = file(os.sys.argv[1], 'r+b')
 data = mmap.mmap(fd.fileno(), 0)
 
 fileLen = len(data)
 
-#    print off, inst.lower()
-print "PASS 1"
-
-# first pass - Do Disassembly
 # add entry point for beginning
-print hex(entryPt)
 labels[entryPt] = {'type':'sub', 'name':'_start', 'xrefs':[], 'calls_out':[], 'end':0}
 tovisit.append(entryPt)
 
+# first pass - Do Disassembly
+print "PASS 1"
 offset = 0
 while True:
-    if len(tovisit) == 0:
+    if len(tovisit) == 0: # any more labels to visit?
         break
     offset = tovisit.pop()
 
     terminalInstruction = False
 
+    # while not finished this label
     while((not disassembly.has_key(offset)) and (not terminalInstruction) and memoryOffsetToFileOffset(offset) != None):
         if offset in tovisit:
             tovisit.remove(offset)
 
+        # decode instructions
         inst = distorm3.Decode(offset, data[memoryOffsetToFileOffset(offset):], distorm3.Decode32Bits)[0]
         #print offset,inst
         ins = inst['mnemonic']
@@ -117,9 +119,11 @@ while True:
         if (ins.startswith("call") or ins[0] == 'j' or ins.startswith("loop")) and ops.find("0x")!=-1 and ops.find("[")==-1:
             newoff = int(ops[ops.find("0x")+2:],16)
 
+# if not already on tovisit list and not disassembled then add to todo list
             if (not newoff in tovisit) and (not disassembly.has_key(newoff)):
                 tovisit.append(newoff)
 
+# add label for called/jmped addr
             if labels.has_key(newoff):
                 if not offset in labels[newoff]['xrefs']:
                     labels[newoff]['xrefs'].append(offset)
@@ -150,6 +154,7 @@ print "PASS 2"
 inProcLabel = False
 offset = BASE_ADDR
 while offset < fileOffsetToMemoryOffset(fileLen):
+# check for function start
     if labels.has_key(offset):
         if labels[offset]['type'] == "sub":
            inProcLabel = offset
@@ -216,6 +221,8 @@ print "TOTaL LBLS", len(labels)
 #    if lbl.has_key('end'):
 #        instructions = data[memoryOffsetToFileOffset(lbladdr):memoryOffsetToFileOffset(lbl['end'])]
 #        print "%x %d %d %d %s" % (lbladdr, lbl['end'] - lbladdr, len(lbl['calls_out']), len(lbl['xrefs']), md5.new(instructions).hexdigest())
+
+# generate graphviz callgraph
 def graphFuncs(labels):
     str = 'digraph {'
     for lbladdr in labels:
