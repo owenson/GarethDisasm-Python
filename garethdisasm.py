@@ -18,6 +18,7 @@ labels = {}
 tovisit = []
 disassembly = {}
 
+# INITIALISE SQLITE DATABASE ----------------
 dbcon = sqlite3.connect(sys.argv[1] + ".db")
 dbcon.row_factory = sqlite3.Row
 dbcur = dbcon.cursor()
@@ -36,7 +37,9 @@ dbcur.execute("CREATE TABLE segments (id integer primary key, name text, fileOff
 
 #dbcur.execute("DROP TABLE IF EXISTS imports")
 #dbcur.execute("CREATE TABLE imports (id integer primary key, name text, addr int)")
+# END INITIALISE SQLITE DATABASE ----------------
 
+# OPEN AND PARSE PE FILE ----------------
 pe = pefile.PE(sys.argv[1], fast_load=True)
 imgBase = pe.OPTIONAL_HEADER.ImageBase
 entryPt = pe.OPTIONAL_HEADER.AddressOfEntryPoint + imgBase
@@ -57,6 +60,9 @@ for entry in pe.DIRECTORY_ENTRY_IMPORT:
 #      print "{}!{} {:x}".format(entry.dll, imp.name, imp.address)
 
 dbcon.commit()
+# END OPEN AND PARSE PE FILE ----------------
+
+# HELPER FUNCS ------------
 def memoryOffsetToFileOffset(off):
     dbcur.execute("SELECT * FROM segments")
     for r in dbcur.fetchmany():
@@ -82,6 +88,7 @@ def replaceLabels(inst):
         if len(res)>0:
             news = news.replace(o, res[0]['labelName'])
     return news
+# END HELPER FUNCS ------------
 
 # Memory map file
 fd = file(os.sys.argv[1], 'r+b')
