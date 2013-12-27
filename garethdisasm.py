@@ -5,8 +5,8 @@ import sqlite3
 import json
 import pefile
 
-#sys.path.append("distorm-read-only/build/lib.linux-i686-2.7/")
-sys.path.append("distorm-read-only/build/lib")
+sys.path.append("distorm-read-only/build/lib/")
+#sys.path.append("distorm-read-only/build/lib")
 #from pydasm import *
 BASE_ADDR = 0x0;
 import distorm3
@@ -27,7 +27,7 @@ LABEL_LABEL = 1
 LABEL_DATA = 2
 LABEL_IMPORT = 3
 dbcur.execute("DROP TABLE IF EXISTS disasm")
-dbcur.execute("CREATE TABLE disasm (offset int, mnemonic text, ops text, size int, meta text, primary key(offset))")
+dbcur.execute("CREATE TABLE disasm (offset int, mnemonic text, ops text, size int, formatted text, comment text, meta text, primary key(offset))")
 dbcur.execute("DROP TABLE IF EXISTS labels")
 dbcur.execute("CREATE TABLE labels (offset int, labelName text, labelType int, meta text, primary key(offset))")
 dbcur.execute("DROP TABLE IF EXISTS xrefs")
@@ -164,17 +164,59 @@ for off in labels:
 # check for function start
     if labels[off]['type'] != "sub":
         continue
+    print off
     offset = off
+    regs = {'ESP': 0, 'EBP': 0 }
+    stack = { }
     while True:
         if disassembly.has_key(offset):
             inst = disassembly[offset]
             ins = inst['mnemonic']
+
+# try to keep track of stack
+            instd = distorm3.Decompose(offset, data[memoryOffsetToFileOffset(offset):], distorm3.Decode32Bits)[0]
+            if ins == "push":
+                regs['ESP'] -= 4
+            elif ins == "pop":
+                regs['ESP'] += 4
+            elif ins == "leave":
+                regs['ESP'] = regs['EBP']
+                regs['ESP'] += 4
+            elif ins == "enter":
+                print "IMPLEMENT ENTER STACK TRACE***************************"
+#                regs['ESP'] -= 4
+#                regs['ESP'] -= instd.operands[0].value
+                print instd
+            else:
+                numOps = len(instd.operands)
+                if numOps == 2 and instd.operands[0].type == distorm3.OPERAND_REGISTER:
+                    val = None
+                    reg = instd.operands[0].name
+
+                    # try to resolve value e.g. esp/ebp
+                    if instd.operands[1].type == distorm3.OPERAND_IMMEDIATE:
+                        val = instd.operands[1].value
+                    elif instd.operands[1].type == distorm3.OPERAND_REGISTER and regs.has_key(instd.operands[1].name):
+                        val = regs[instd.operands[1].name]
+
+                    if val and regs.has_key(reg):
+                        if ins == "sub":
+                            regs[reg] -= val
+
+                        if ins == "add":
+                            regs[reg] += val
+
+                        if ins == "mov":
+                            regs[reg] = val
 
             if(ins.startswith("call") and inst['ops'].find("0x") != -1 and inst['ops'].find("[") == -1):  # collate calls out of function
                 labels[off]['calls_out'].append(int(inst['ops'][inst['ops'].find("0x")+2:],16))
                 dbcur.execute("UPDATE labels SET meta=? WHERE offset=?", (json.dumps(labels[off]), off))
 
             if(ins.startswith("ret")):  #detect function termination
+                print "END: ", regs
+                if regs['ESP'] != 0:
+                    print "***warn stack trace may have failed"
                 if not labels[off].has_key('end'):
                     labels[off]['end'] = offset + inst['size']
                     dbcur.execute("UPDATE labels SET meta=? WHERE offset=?", (json.dumps(labels[off]), off))
@@ -182,7 +224,7 @@ for off in labels:
 
             offset += inst['size']
         else:
-            offset += 1
+            break
 
 #pass 3 - print
 print "PASS 3: Display"

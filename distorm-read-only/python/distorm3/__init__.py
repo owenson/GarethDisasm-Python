@@ -824,7 +824,8 @@ class Instruction (object):
 
     def _toText(self):
         # use the decode which already returns the text formatted well (with prefixes, etc).
-        return Decode(self.address, self.instructionBytes, self.dt)[0][2]
+        print Decode(self.address, self.instructionBytes, self.dt)[0]
+        return Decode(self.address, self.instructionBytes, self.dt)[0]
 
     def __str__(self):
         return self._toText()
