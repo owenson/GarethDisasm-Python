@@ -70,6 +70,14 @@ def memoryOffsetToFileOffset(off):
             return off - int(r['virtOffset']) + int(r['fileOffset'])
     return None
 
+def memoryOffsetToSegmentName(off):
+    dbcur.execute("SELECT * FROM segments")
+    for r in dbcur.fetchmany():
+        if off>=r['virtOffset'] and off<=r['virtOffset']+r['fileSize']:
+            return r['name']
+    return ""
+
+    return None
 def fileOffsetToMemoryOffset(off):
     dbcur.execute("SELECT * FROM segments")
     for r in dbcur.fetchmany():
@@ -244,7 +252,8 @@ def disassemblyText(disassembly, labels, start, end):
 
             ins = replaceLabels(inst['instr'])
 
-            str += "<span style='color:red'>%08x</span>:\t%s\n" % (offset,ins)
+            segnm = memoryOffsetToSegmentName(offset)
+            str += "<span style='color:red'>%s.%08x</span>:\t%s\n" % (segnm, offset,ins)
 
             if(ins.startswith("ret") and inProcLabel):  #detect function termination
                 str += "<span style='color:blue'>---ENDPROC---  ; sub_%x ; length = %d bytes ; %d calls out</span>\n\n" % (inProcLabel, labels[inProcLabel]['end'] - inProcLabel, len(labels[inProcLabel]['calls_out']))
@@ -285,10 +294,16 @@ def graphFuncs(labels):
     str += "}"
     return str
 
-#print graphFuncs(labels)
-#app = QApplication(sys.argv)
-#ex = DisasmWin(dtext, labels)
-#sys.exit(app.exec_())
+print graphFuncs(labels)
+
+app = QApplication(sys.argv)
+ex = DisasmWin(dtext, labels)
+ex.show()
+sys.exit(app.exec_())
+
+f = open("callgraph.dot", "w+")
+f.write(graphFuncs(labels))
+f.close()
 
 dbcon.commit()
 dbcon.close()
